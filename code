@@ -1,0 +1,407 @@
+#include "p16f88.inc"
+
+; CONFIG1
+; __config 0xFF09
+ __CONFIG _CONFIG1, _FOSC_XT & _WDTE_OFF & _PWRTE_OFF & _MCLRE_OFF & _BOREN_OFF & _LVP_OFF & _CPD_OFF & _WRT_OFF & _CCPMX_RB0 & _CP_OFF
+; CONFIG2
+; __config 0xFFFC
+ __CONFIG _CONFIG2, _FCMEN_OFF & _IESO_OFF
+
+ #DEFINE CLK PORTA,0
+ #DEFINE DS PORTA,1
+ #DEFINE ST PORTA,2
+ #DEFINE SN PORTA,5
+ #DEFINE LO PORTA,3
+ #DEFINE M1 PORTA,4
+ #DEFINE CO1 PORTB,0
+ #DEFINE CO2 PORTB,1
+ #DEFINE CO3 PORTB,2
+ #DEFINE M2 PORTB,3
+ #DEFINE F1 PORTB,4
+ #DEFINE F2 PORTB,5
+ #DEFINE F3 PORTB,6
+ #DEFINE F4 PORTB,7
+ ;**** Definicion de variables **** 
+ CBLOCK 0X20
+    TECLA, AUX, DATO, W_TEMP, STATUS_TEMP,D1,D2,D3,D4,CONT,UNI,DECE,CEN,MILL,CLAVE,P1,P2,P3,P4,CC1,CC2
+ ENDC
+;HOLA PANQUEROS SOLO QUIERO HACERLES RECORDAR QUE ESTA PROGRAMACION FUE HECHA POR MANUEL SILVA  Y EL QUE DIGA LO CONTRARIO 
+;ESTA CONFUNDIENDO LAS COSAS PSDT: EL CHU COME GATOS
+;**** Inicio  del Micro **** 
+ ORG  0X00    ; Aqui comienza el micro.- 
+ GOTO INICIO   ; Salto a inicio de mi programa.- 
+ ORG 0X04
+ GOTO INT_RB        
+ ORG 0X05  
+
+TABLA
+    ADDWF PCL,1
+    DT 0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x67,0X40 
+ 
+;**** Programa principal **** 
+;**** Configuración de puertos **** 
+INICIO
+    BANKSEL TRISA
+    MOVLW 0xF0
+    MOVWF TRISB
+    MOVLW 0x20
+    MOVWF TRISA
+    CLRF ANSEL    
+    BCF OPTION_REG,7 
+    BANKSEL PORTA
+    CLRF PORTB 
+    CLRF CONT
+    BSF M2
+    BCF M1
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    BCF M2
+    BCF M1
+    
+		
+BUCLE
+    BTFSS SN
+    GOTO $+5
+    BSF LO
+    BCF INTCON,GIE
+    BCF INTCON,RBIE
+    GOTO BUCLE
+    CALL ACT_INT
+    BCF LO
+    GOTO BUCLE
+
+ACT_INT
+    BCF INTCON,RBIF
+    BSF INTCON,GIE
+    BSF INTCON,RBIE
+    RETURN
+;**** Interrupcion *****
+INT_RB
+    MOVWF W_TEMP  ; Copiamos W a un registro Temporario.
+    SWAPF STATUS,0  ;Invertimos los nibles del registro STATUS.
+    MOVWF STATUS_TEMP  ; Guardamos STATUS en un registro 
+	
+    BTFSS INTCON,RBIF
+    GOTO SALIR_INT
+	
+    MOVLW 0X01
+    MOVWF AUX
+
+    MOVLW 0X01
+    MOVWF TECLA
+    BCF CO1
+    BSF CO2
+    BSF CO3
+    CALL TESTEO
+    CLRW
+    XORWF AUX
+    BTFSS STATUS,Z
+    GOTO $+2
+    GOTO LIMP_BAN
+
+    MOVLW 0X02
+    MOVWF TECLA
+    BSF CO1
+    BCF CO2
+    BSF CO3
+    CALL TESTEO
+    CLRW
+    XORWF AUX
+    BTFSS STATUS,Z
+    GOTO $+2
+    GOTO LIMP_BAN
+
+    MOVLW 0X03
+    MOVWF TECLA
+    BSF CO1
+    BSF CO2
+    BCF CO3
+    CALL TESTEO
+    CLRW
+    XORWF AUX
+    BTFSS STATUS,Z
+    GOTO $+2
+    GOTO LIMP_BAN
+	
+LIMP_BAN
+    MOVLW .20
+    CALL Delay_ms
+    BCF CO1
+    BCF CO2
+    BCF CO3
+    NOP
+    MOVLW .4
+    XORWF CONT,0
+    BTFSS STATUS,Z
+    GOTO SALIR_INT
+    MOVLW .2
+    XORWF CC1,0
+    BTFSS STATUS,Z
+    GOTO $+2
+    GOTO CAMBIO
+    CALL COMPARA
+    MOVLW .4
+    XORWF CLAVE,0
+    BTFSS STATUS,Z
+    GOTO $+4
+    GOTO CAMBIO
+    GOTO MOTORABRIR
+    GOTO $+2
+    CALL LIMPIAR
+SALIR_INT
+    BCF INTCON,RBIF
+    SWAPF STATUS_TEMP,0 ; Invertimos lo nibles de STATUS_Temp.    
+    MOVWF STATUS
+    SWAPF W_TEMP,1  ; Invertimos los nibles y lo guardamos en el mismo registro.
+    SWAPF W_TEMP,0 
+    RETFIE
+
+MOTORABRIR
+    BSF M1
+    BCF M2
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    BCF M2
+    BCF M1
+    CALL LIMPIAR
+    GOTO SALIR_INT
+
+MOTORCERRAR
+    BSF M2
+    BCF M1
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    BCF M2
+    BCF M1
+    RETURN
+COMPARA
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+     MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVLW .250
+    CALL Delay_ms
+    MOVFW P1
+    XORWF MILL,0
+    BTFSS STATUS,Z
+    GOTO  $+2
+    INCF CLAVE,1
+    MOVFW P2
+    XORWF CEN,0
+    BTFSS STATUS,Z
+    GOTO  $+2
+    INCF CLAVE,1
+    MOVFW P3
+    XORWF DECE,0
+    BTFSS STATUS,Z
+    GOTO  $+2
+    INCF CLAVE,1
+    MOVFW P4
+    XORWF UNI,0
+    BTFSS STATUS,Z
+    GOTO  $+2
+    INCF CLAVE,1
+    RETURN
+LIMPIAR
+    CLRW
+    CALL ENVIA_SER
+    BCF ST
+    NOP
+    BSF ST
+    CLRW
+    CALL ENVIA_SER
+    BCF ST
+    NOP
+    BSF ST
+    CLRW
+    CALL ENVIA_SER
+    BCF ST
+    NOP
+    BSF ST
+    CLRW
+    CALL ENVIA_SER
+    BCF ST
+    NOP
+    BSF ST
+    CLRF CONT
+    CLRF UNI
+    CLRF DECE
+    CLRF CEN
+    CLRF MILL
+    CLRF CLAVE
+    BSF LO
+    RETURN
+
+TESTEO
+    BTFSC F1
+    GOTO $+6
+    BTFSS F1
+    GOTO $-1
+    CALL MUESTRA
+    CLRF AUX
+    RETURN
+	
+    BTFSC F2
+    GOTO $+8
+    BTFSS F2
+    GOTO $-1
+    MOVLW .3
+    ADDWF TECLA,1
+    CALL MUESTRA
+    CLRF AUX
+    RETURN
+
+    BTFSC F3
+    GOTO $+8
+    BTFSS F3
+    GOTO $-1
+    MOVLW .6
+    ADDWF TECLA,1
+    CALL MUESTRA
+    CLRF AUX
+    RETURN
+	
+    BTFSC F4
+    GOTO $+0C
+    BTFSS F4
+    GOTO $-1
+    MOVLW .8
+    ADDWF TECLA,1
+    MOVLW .10
+    XORWF TECLA,0
+    BTFSS STATUS,Z
+    GOTO $+5
+    CLRF TECLA
+    CALL MUESTRA
+    CLRF AUX
+    RETURN
+    MOVLW .9
+    XORWF TECLA,0
+    BTFSS STATUS,Z
+    GOTO $+3
+    CALL LIMPIAR
+    RETURN
+    MOVLW .11
+    XORWF TECLA,0
+    BTFSS STATUS,Z
+    RETURN
+    MOVLW .1
+    MOVWF CC1
+    RETURN
+     
+HASHTAG
+    CALL LIMPIAR
+    CALL COMPARA
+    MOVLW .4
+    XORWF CLAVE,0
+    BTFSS STATUS,Z
+    RETURN
+    CALL CAMBIO    
+    RETURN
+
+CAMBIO
+    MOVLW .1
+    XORWF CC1,0
+    BTFSS STATUS,Z
+    GOTO $+4
+    INCF CC1,1
+    CALL LIMPIAR
+    GOTO SALIR_INT
+    MOVLW .2
+    XORWF CC1,0
+    BTFSS STATUS,Z
+    GOTO MOTORABRIR
+    MOVFW MILL
+    MOVWF P1
+    MOVFW CEN
+    MOVWF P2
+    MOVFW DECE
+    MOVWF P3
+    MOVFW UNI
+    MOVWF P4
+    CLRF CC1
+    CALL LIMPIAR
+    GOTO SALIR_INT
+MUESTRA
+    INCF CONT,1
+    MOVLW .1
+    XORWF CONT,0
+    BTFSS STATUS,Z
+    GOTO $+4
+    MOVFW TECLA
+    MOVWF MILL
+    GOTO IMPRIMIR
+    MOVLW .2
+    XORWF CONT,0
+    BTFSS STATUS,Z
+    GOTO $+4
+    MOVFW TECLA
+    MOVWF CEN
+    GOTO IMPRIMIR
+    MOVLW .3
+    XORWF CONT,0
+    BTFSS STATUS,Z
+    GOTO $+4
+    MOVFW TECLA
+    MOVWF DECE
+    GOTO IMPRIMIR
+    MOVLW .4
+    XORWF CONT,0
+    BTFSS STATUS,Z
+    GOTO $+4
+    MOVFW TECLA
+    MOVWF UNI
+    GOTO IMPRIMIR
+IMPRIMIR    
+    MOVFW TECLA
+    CALL TABLA
+    CALL ENVIA_SER
+    BCF ST
+    NOP
+    BSF ST
+    RETURN
+
+ENVIA_SER
+    MOVWF DATO
+    MOVLW .8
+    MOVWF AUX
+    BTFSC DATO,7
+    GOTO $+3
+    BCF DS
+    GOTO $+2
+    BSF DS
+    BCF CLK
+    RLF DATO,1
+    BSF CLK
+    DECFSZ AUX,1
+    GOTO $-9
+    RETURN
+
+    INCLUDE <Delay_ms.inc>
+    
+
+    END
+
+
